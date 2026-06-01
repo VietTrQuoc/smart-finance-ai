@@ -40,7 +40,3 @@ smart-finance-ai/
 └── README.md
 
 ```
-
-> **Lưu ý quan trọng:** Để tránh việc vô tình upload file dữ liệu lớn lên GitHub, hãy đảm bảo rằng bạn đã thêm dòng `data/` vào tệp `.gitignore` của mình.
-
-```
