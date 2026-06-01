@@ -19,7 +19,7 @@ Trong thư mục gốc của dự án (`smart-finance-ai`), tiến hành tạo m
   ```bash
   mkdir data
 
-```
+  ```
 
 ### Bước 3: Giải nén và đổi tên file
 
@@ -32,11 +32,11 @@ Trong thư mục gốc của dự án (`smart-finance-ai`), tiến hành tạo m
 
 Sau khi hoàn thành, cấu trúc thư mục dự án của bạn phải trông giống như thế này:
 
-```text
-smart-finance-ai/
-├── data/
-│   └── synthetic_fraud_data.csv
-├── .gitignore
-└── README.md
+  ```text
+  smart-finance-ai/
+  ├── data/
+  │   └── synthetic_fraud_data.csv
+  ├── .gitignore
+  └── README.md
 
-```
+  ```
