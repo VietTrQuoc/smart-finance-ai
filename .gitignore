@@ -5,6 +5,7 @@ data/
 *.xls
 *.parquet
 *.feather
+artifacts/
 
 # Python
 __pycache__/
