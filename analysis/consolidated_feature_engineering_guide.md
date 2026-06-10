@@ -1,9 +1,6 @@
 # Hướng dẫn Feature Engineering cho XGBoost Fraud Detection (Đã kiểm chứng)
 
-Tài liệu này tổng hợp các thông tin **đã được kiểm chứng** từ `report.html` (YData Profiling v4.19.1), kết hợp các đề xuất Feature Engineering tốt nhất từ 2 báo cáo trước đó, loại bỏ các thông tin sai lệch.
-
 > **Nguồn dữ liệu:** `data/synthetic_fraud_data.csv`
-> **Ngày tạo report:** 2026-06-02
 > **Công cụ profiling:** YData Profiling v4.19.1
 
 ---

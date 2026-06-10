@@ -1,0 +1,310 @@
+[
+  {
+    "product_id": "P001",
+    "product_name": "Cashback Credit Card",
+    "product_type": "credit_card",
+    "description": "Credit card for customers with strong shopping behavior.",
+    "risk_allowed": "medium",
+    "target_behavior": "shopping_high",
+    "target_signals_json": {
+      "shopping_ratio": 0.55,
+      "shopping_frequency_30d": 0.25,
+      "avg_transaction_amount": 0.10,
+      "risk_score_inverse": 0.10
+    },
+    "eligibility_json": {
+      "max_risk_score": 0.65,
+      "min_frequency_30d": 2
+    },
+    "campaign_priority": 0.80,
+    "reason_template": "Customer has frequent shopping transactions and can benefit from cashback rewards.",
+    "is_active": true
+  },
+  {
+    "product_id": "P002",
+    "product_name": "Travel Insurance",
+    "product_type": "insurance",
+    "description": "Insurance package for customers with travel spending signals.",
+    "risk_allowed": "low",
+    "target_behavior": "travel_high",
+    "target_signals_json": {
+      "travel_ratio": 0.50,
+      "travel_frequency_90d": 0.30,
+      "foreign_txn_proxy": 0.10,
+      "risk_score_inverse": 0.10
+    },
+    "eligibility_json": {
+      "max_risk_score": 0.70
+    },
+    "campaign_priority": 0.85,
+    "reason_template": "Customer shows recent travel-related behavior.",
+    "is_active": true
+  },
+  {
+    "product_id": "P003",
+    "product_name": "Consumer Loan",
+    "product_type": "loan",
+    "description": "Small consumer loan for customers with short-term cashflow needs.",
+    "risk_allowed": "medium",
+    "target_behavior": "negative_cashflow",
+    "target_signals_json": {
+      "negative_cashflow_days": 0.40,
+      "net_cashflow_30d_inverse": 0.35,
+      "frequency_30d": 0.15,
+      "risk_score_inverse": 0.10
+    },
+    "eligibility_json": {
+      "max_risk_score": 0.55,
+      "min_frequency_30d": 3
+    },
+    "campaign_priority": 0.65,
+    "reason_template": "Customer has signals of short-term spending pressure.",
+    "is_active": true
+  },
+  {
+    "product_id": "P004",
+    "product_name": "Overdraft Loan",
+    "product_type": "loan",
+    "description": "Overdraft product for end-of-month cash shortage patterns.",
+    "risk_allowed": "medium",
+    "target_behavior": "end_month_cash_shortage",
+    "target_signals_json": {
+      "end_month_negative_cashflow_flag": 0.45,
+      "balance_volatility": 0.25,
+      "negative_cashflow_days": 0.20,
+      "risk_score_inverse": 0.10
+    },
+    "eligibility_json": {
+      "max_risk_score": 0.55
+    },
+    "campaign_priority": 0.60,
+    "reason_template": "Customer has end-of-month spending pressure signals.",
+    "is_active": true
+  },
+  {
+    "product_id": "P005",
+    "product_name": "Flexible Savings",
+    "product_type": "saving",
+    "description": "Flexible savings product for low-risk customers with stable activity.",
+    "risk_allowed": "low",
+    "target_behavior": "positive_cashflow",
+    "target_signals_json": {
+      "risk_score_inverse": 0.35,
+      "recency_inverse": 0.25,
+      "frequency_30d": 0.20,
+      "balance_volatility_inverse": 0.20
+    },
+    "eligibility_json": {
+      "max_risk_score": 0.45
+    },
+    "campaign_priority": 0.70,
+    "reason_template": "Customer is active and low risk, suitable for a flexible savings offer.",
+    "is_active": true
+  },
+  {
+    "product_id": "P006",
+    "product_name": "Health Insurance",
+    "product_type": "insurance",
+    "description": "Health insurance package for customers with healthcare spending signals.",
+    "risk_allowed": "low",
+    "target_behavior": "healthcare_high",
+    "target_signals_json": {
+      "healthcare_ratio": 0.55,
+      "frequency_90d": 0.20,
+      "risk_score_inverse": 0.15,
+      "avg_transaction_amount": 0.10
+    },
+    "eligibility_json": {
+      "max_risk_score": 0.70
+    },
+    "campaign_priority": 0.75,
+    "reason_template": "Customer has healthcare-related spending signals.",
+    "is_active": true
+  },
+  {
+    "product_id": "P007",
+    "product_name": "Premium Travel Card",
+    "product_type": "credit_card",
+    "description": "Premium credit card with travel perks, lounge access, and no foreign transaction fees.",
+    "risk_allowed": "medium",
+    "target_behavior": "travel_premium",
+    "target_signals_json": {
+      "travel_ratio": 0.30,
+      "foreign_txn_ratio": 0.30,
+      "avg_transaction_amount": 0.25,
+      "risk_score_inverse": 0.15
+    },
+    "eligibility_json": {
+      "max_risk_score": 0.55,
+      "min_frequency_30d": 5
+    },
+    "campaign_priority": 0.82,
+    "reason_template": "Customer travels frequently and would benefit from premium travel card perks.",
+    "is_active": true
+  },
+  {
+    "product_id": "P008",
+    "product_name": "Life Insurance",
+    "product_type": "insurance",
+    "description": "Life insurance for customers with stable, long-term financial behavior.",
+    "risk_allowed": "low",
+    "target_behavior": "family_stable",
+    "target_signals_json": {
+      "risk_score_inverse": 0.40,
+      "recency_inverse": 0.25,
+      "top_country_ratio": 0.20,
+      "frequency_90d": 0.15
+    },
+    "eligibility_json": {
+      "max_risk_score": 0.45,
+      "min_frequency_90d": 10
+    },
+    "campaign_priority": 0.65,
+    "reason_template": "Customer shows stable domestic activity, suitable for life insurance protection.",
+    "is_active": true
+  },
+  {
+    "product_id": "P009",
+    "product_name": "Home Loan",
+    "product_type": "loan",
+    "description": "Mortgage product for customers with strong domestic ties and stable income signals.",
+    "risk_allowed": "medium",
+    "target_behavior": "domestic_settled",
+    "target_signals_json": {
+      "top_country_ratio": 0.40,
+      "frequency_90d": 0.20,
+      "avg_transaction_amount": 0.20,
+      "risk_score_inverse": 0.20
+    },
+    "eligibility_json": {
+      "max_risk_score": 0.50,
+      "min_frequency_90d": 15
+    },
+    "campaign_priority": 0.55,
+    "reason_template": "Customer is domestically settled and may be ready for a home loan.",
+    "is_active": true
+  },
+  {
+    "product_id": "P010",
+    "product_name": "Auto Loan",
+    "product_type": "loan",
+    "description": "Vehicle financing for customers with moderate spending and domestic transport patterns.",
+    "risk_allowed": "medium",
+    "target_behavior": "domestic_transport",
+    "target_signals_json": {
+      "merchant_category_ratio_Gas": 0.30,
+      "top_country_ratio": 0.30,
+      "frequency_30d": 0.25,
+      "risk_score_inverse": 0.15
+    },
+    "eligibility_json": {
+      "max_risk_score": 0.55,
+      "min_frequency_30d": 5
+    },
+    "campaign_priority": 0.58,
+    "reason_template": "Customer has domestic transport spending, possibly in the market for auto financing.",
+    "is_active": true
+  },
+  {
+    "product_id": "P011",
+    "product_name": "Fixed Deposit",
+    "product_type": "saving",
+    "description": "Term deposit with guaranteed returns for conservative savers.",
+    "risk_allowed": "low",
+    "target_behavior": "conservative_saving",
+    "target_signals_json": {
+      "risk_score_inverse": 0.40,
+      "top_country_ratio": 0.30,
+      "balance_volatility_inverse": 0.20,
+      "recency_inverse": 0.10
+    },
+    "eligibility_json": {
+      "max_risk_score": 0.40
+    },
+    "campaign_priority": 0.68,
+    "reason_template": "Customer has conservative domestic spending, suitable for a fixed deposit offer.",
+    "is_active": true
+  },
+  {
+    "product_id": "P012",
+    "product_name": "Investment Fund",
+    "product_type": "investment",
+    "description": "Managed investment fund for high-net-worth customers seeking wealth growth.",
+    "risk_allowed": "high",
+    "target_behavior": "wealth_growth",
+    "target_signals_json": {
+      "total_amount_log": 0.35,
+      "high_value_txn_ratio": 0.30,
+      "category_diversity": 0.20,
+      "risk_score_inverse": 0.15
+    },
+    "eligibility_json": {
+      "max_risk_score": 0.70
+    },
+    "campaign_priority": 0.72,
+    "reason_template": "Customer has high-value transactions and diversified spending, ready for investment products.",
+    "is_active": true
+  },
+  {
+    "product_id": "P013",
+    "product_name": "Retirement Pension Plan",
+    "product_type": "pension",
+    "description": "Long-term retirement savings plan for established customers.",
+    "risk_allowed": "low",
+    "target_behavior": "long_term_saving",
+    "target_signals_json": {
+      "risk_score_inverse": 0.35,
+      "frequency_90d": 0.25,
+      "top_country_ratio": 0.25,
+      "recency_inverse": 0.15
+    },
+    "eligibility_json": {
+      "max_risk_score": 0.50,
+      "min_frequency_90d": 20
+    },
+    "campaign_priority": 0.60,
+    "reason_template": "Customer has long-term stable activity, suitable for retirement planning.",
+    "is_active": true
+  },
+  {
+    "product_id": "P014",
+    "product_name": "Bill Payment Service",
+    "product_type": "service",
+    "description": "Automated bill payment service for domestic utility and recurring payments.",
+    "risk_allowed": "low",
+    "target_behavior": "domestic_utility",
+    "target_signals_json": {
+      "top_country_ratio": 0.40,
+      "frequency_30d": 0.30,
+      "merchant_category_ratio_Grocery": 0.15,
+      "risk_score_inverse": 0.15
+    },
+    "eligibility_json": {
+      "max_risk_score": 0.55,
+      "min_frequency_30d": 3
+    },
+    "campaign_priority": 0.50,
+    "reason_template": "Customer has recurring domestic transactions, suitable for automated bill payment.",
+    "is_active": true
+  },
+  {
+    "product_id": "P015",
+    "product_name": "Personal Accident Insurance",
+    "product_type": "insurance",
+    "description": "Affordable accident protection for all customer segments.",
+    "risk_allowed": "low",
+    "target_behavior": "general_protection",
+    "target_signals_json": {
+      "risk_score_inverse": 0.35,
+      "frequency_30d": 0.30,
+      "avg_transaction_amount": 0.20,
+      "category_diversity": 0.15
+    },
+    "eligibility_json": {
+      "max_risk_score": 0.65
+    },
+    "campaign_priority": 0.55,
+    "reason_template": "Customer could benefit from affordable personal accident coverage.",
+    "is_active": true
+  }
+]

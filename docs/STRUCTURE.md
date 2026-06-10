@@ -14,6 +14,7 @@ flowchart TB
     classDef fraudlayer fill:#533483,stroke:#3a2568,color:#e0e0e0
     classDef reclayer fill:#1b7a4a,stroke:#145c38,color:#e0e0e0
     classDef leadlayer fill:#b8860b,stroke:#8b6508,color:#fff
+    classDef seglayer fill:#6c5ce7,stroke:#4834d4,color:#fff
     classDef llmlayer fill:#c0392b,stroke:#922b21,color:#e0e0e0
     classDef agentlayer fill:#2c3e50,stroke:#1a252f,color:#e0e0e0
     classDef apilayer fill:#2471a3,stroke:#1a5276,color:#e0e0e0
@@ -52,25 +53,39 @@ flowchart TB
     %% ── Layer 2: Fraud Detection ──
     subgraph L2["🚨 LAYER 2 — Fraud Detection Engine"]
         direction TB
-        rule_fraud["📏 Rule-based Filter<br/><i>7 Hard Rules<br/>(Amount Spike, Velocity,<br/>Device Change, Fast Cash-out,<br/>Many-to-One, Circular...)</i>"]
-        iso_forest["🌲 Isolation Forest<br/><i>Unsupervised Anomaly<br/>Detection</i>"]
-        xgboost["🚀 XGBoost Classifier<br/><i>Supervised Fraud<br/>Classification + SMOTE</i>"]
+        rule_fraud["📏 Rule-based Guardrail<br/><i>Optional policy/audit<br/>not part of prediction score</i>"]
+        xgboost["🚀 XGBoost Classifier<br/><i>Only fraud prediction model<br/>Supervised classification</i>"]
         shap["🔍 SHAP Explainer<br/><i>Explainable AI —<br/>Top Contributing Features</i>"]
-        decision["⚡ Final Decision Engine<br/><i>Weighted Ensemble<br/>(Rule + IF + XGBoost)</i>"]
+        decision["⚡ Threshold Policy<br/><i>fraud_score = XGBoost probability<br/>PASS / REVIEW / BLOCK</i>"]
 
-        rule_fraud --> decision
-        iso_forest --> decision
         xgboost --> decision
         decision --> shap
+        rule_fraud -. optional guardrail .-> decision
     end
 
     fraud_feat_store --> rule_fraud
-    fraud_feat_store --> iso_forest
     fraud_feat_store --> xgboost
 
     %% ── Decision Gate ──
     decision_gate{"🛑 FRAUD GATE<br/>fraud_score?"}
     decision --> decision_gate
+
+    %% ── Layer 2.5: Customer Segmentation ──
+    subgraph L25["🧩 LAYER 2.5 — Customer Segmentation Engine"]
+        direction TB
+        seg_assign["⚙️ Incremental Assignment<br/><i>Load active scaler/SVD/KMeans<br/>transform + predict changed users</i>"]
+        seg_retrain["🔁 Full Retrain<br/><i>Select PC/K by metrics<br/>create candidate model_version</i>"]
+        seg_profile["🧠 LLM Segment Profiler<br/><i>Name + describe clusters<br/>from aggregate profiles only</i>"]
+        user_segments_node["📌 user_segments<br/><i>cluster_id + model_version</i>"]
+        cluster_profiles_node["📋 cluster_profiles<br/><i>names, signals, product hints</i>"]
+
+        seg_retrain --> seg_profile
+        seg_assign --> user_segments_node
+        seg_profile --> cluster_profiles_node
+    end
+
+    user_feat --> seg_assign
+    user_feat --> seg_retrain
 
     %% ── Layer 3: Recommendation ──
     subgraph L3["🎯 LAYER 3 — Recommendation Engine"]
@@ -83,6 +98,7 @@ flowchart TB
     end
 
     user_feat --> rec_rule
+    cluster_profiles_node -. "segment context" .-> rec_rule
     decision_gate -- "fraud < 0.7" --> rec_filter
     decision_gate -- "fraud ≥ 0.7" --> block_rec["🚫 BLOCK<br/>Không gợi ý<br/>sản phẩm"]
 
@@ -99,6 +115,7 @@ flowchart TB
 
     top3 --> lead_calc
     user_feat --> lead_calc
+    cluster_profiles_node -. "segment context" .-> lead_calc
 
     %% ── Layer 4: Agent Orchestration ──
     subgraph L4["🤖 LAYER 4 — Agentic Orchestration (LangGraph)"]
@@ -139,14 +156,23 @@ flowchart TB
     subgraph L6["🔌 LAYER 6 — FastAPI Backend"]
         direction LR
         api_fraud["POST /fraud/score"]
-        api_rec["GET /recommendations/{user_id}"]
+        api_rec["GET /users/{user_id}/recommendations"]
         api_lead["GET /recommendations/lead-queue"]
         api_mark["POST /recommendations/mark-consulted"]
         api_pitch["POST /users/{user_id}/generate-pitch"]
         api_feedback["POST /fraud/feedback"]
+        api_seg_update["POST /segmentation/update"]
+        api_seg_runs["GET /segmentation/runs/{run_id}"]
+        api_seg_clusters["GET /segmentation/clusters"]
+        api_user_segment["GET /users/{user_id}/segment"]
     end
 
     decision --> api_fraud
+    seg_assign --> api_seg_update
+    seg_retrain --> api_seg_update
+    seg_retrain --> api_seg_runs
+    cluster_profiles_node --> api_seg_clusters
+    user_segments_node --> api_user_segment
     top3 --> api_rec
     lead_queue --> api_lead
     lead_queue --> api_mark
@@ -162,11 +188,14 @@ flowchart TB
         db_prod[("product_catalog")]
         db_consult[("consultation_log<br/>lead_scores<br/>marketing_campaigns")]
         db_pitch[("pitch_logs<br/>recommendation_logs")]
+        db_seg[("segmentation_model_versions<br/>user_segments<br/>cluster_profiles<br/>segmentation_runs")]
         cache[("⚡ Redis Cache<br/>(real-time velocity<br/>features)")]
     end
 
     raw_db --> db_txn
     user_feat --> db_user
+    user_segments_node --> db_seg
+    cluster_profiles_node --> db_seg
     decision --> db_fraud
     top3 --> db_prod
     lead_queue --> db_consult
@@ -190,6 +219,7 @@ flowchart TB
             lead_table["📋 Lead Queue Table<br/><i>Ranked by Lead Score</i>"]
             campaign_filter["🔽 Campaign / Product Filter"]
             insights["💡 Customer Insights<br/><i>Spending chart + Risk</i>"]
+            segment_badge["🧩 Segment Badge<br/><i>Name + key signals</i>"]
             top3_card["🏆 Top-3 Products Card<br/><i>+ Score + Reason</i>"]
             pitch_btn["🎤 Generate Pitch Button"]
             mark_btn["✔️ Mark as Consulted<br/><i>interested / not / converted</i>"]
@@ -204,6 +234,7 @@ flowchart TB
     api_lead --> lead_table
     api_lead --> campaign_filter
     api_rec --> insights
+    api_user_segment --> segment_badge
     api_rec --> top3_card
     api_pitch --> pitch_btn
     api_mark --> mark_btn
@@ -219,15 +250,16 @@ flowchart TB
     class raw_db datasource
     class cleaning,feat_eng,fraud_feat datalayer
     class user_feat,fraud_feat_store db
-    class rule_fraud,iso_forest,xgboost,shap,decision fraudlayer
+    class seg_assign,seg_retrain,seg_profile,user_segments_node,cluster_profiles_node seglayer
+    class rule_fraud,xgboost,shap,decision fraudlayer
     class rec_rule,rec_filter,top3 reclayer
     class lead_calc,lead_queue,campaign leadlayer
     class guardrail,prompt,llm_api,fallback llmlayer
     class data_agent,fraud_agent,rec_agent,lead_agent,pitch_agent,format_agent agentlayer
-    class api_fraud,api_rec,api_lead,api_mark,api_pitch,api_feedback apilayer
+    class api_fraud,api_rec,api_lead,api_mark,api_pitch,api_feedback,api_seg_update,api_seg_clusters,api_user_segment apilayer
     class decision_gate decision
     class block_rec block
-    class db_txn,db_user,db_fraud,db_prod,db_consult,db_pitch,cache db
+    class db_txn,db_user,db_fraud,db_prod,db_consult,db_pitch,db_seg,cache db
     class TAB1,TAB2 dashboard
 ```
 
@@ -249,11 +281,10 @@ sequenceDiagram
         Note over A,DB: 🚨 FLOW 1 — Real-time Fraud Detection
         DB->>FR: New transaction arrives
         FR->>C: Get velocity features (cached)
-        FR->>FR: Rule-based check (< 5ms)
-        FR->>FR: Isolation Forest (< 10ms)
+        FR->>FR: Optional rule guardrail/audit (< 5ms)
         FR->>FR: XGBoost classify (< 10ms)
         FR->>FR: SHAP explain (< 50ms)
-        FR->>FR: Final Decision (weighted ensemble)
+        FR->>FR: Threshold policy (fraud_score = XGBoost probability)
         FR->>DB: Save fraud_alerts + fraud_model_scores
         FR->>D: Push alert to dashboard (WebSocket)
         D->>A: Show fraud alert ❌ + SHAP chart
@@ -336,16 +367,17 @@ sequenceDiagram
 flowchart TB
     classDef rule fill:#2ecc71,stroke:#27ae60,color:#fff
     classDef ml fill:#3498db,stroke:#2980b9,color:#fff
-    classDef ensemble fill:#9b59b6,stroke:#8e44ad,color:#fff
+    classDef decision fill:#9b59b6,stroke:#8e44ad,color:#fff
     classDef explain fill:#e67e22,stroke:#d35400,color:#fff
     classDef output fill:#e74c3c,stroke:#c0392b,color:#fff
     classDef block fill:#c0392b,stroke:#922b21,color:#fff
 
     tx["🔄 New Transaction"] --> extract["⚙️ Feature Extraction<br/><i>Velocity + Behavioral +<br/>Device + Sequence</i>"]
     extract --> rule_check
+    extract --> xgb_model
 
-    subgraph RULE["📏 LAYER 1 — Rule-based (MVP)"]
-        rule_check["Evaluate 7 Rules"]
+    subgraph RULE["📏 OPTIONAL RULE GUARDRAIL — policy/audit only"]
+        rule_check["Evaluate 7 Rules<br/><i>not part of prediction score</i>"]
         r1["Rule 1: Amount Spike"]
         r2["Rule 2: Velocity Check"]
         r3["Rule 3: Device Change"]
@@ -355,27 +387,17 @@ flowchart TB
         r7["Rule 7: Circular TX"]
 
         rule_check --> r1 & r2 & r3 & r4 & r5 & r6 & r7
-        r1 & r2 & r3 & r4 & r5 & r6 & r7 --> rule_score["Rule Score<br/>(0.1 / 0.6 / 0.9)"]
+        r1 & r2 & r3 & r4 & r5 & r6 & r7 --> rule_alert["Policy Alert<br/>audit / optional override"]
     end
 
-    subgraph IF["🌲 LAYER 2 — Isolation Forest (Unsupervised)"]
-        if_model["Isolation Forest<br/>200 trees, contamination=0.01"]
-        if_model --> anomaly_score["Anomaly Score<br/>(normalized 0-1)"]
-    end
-
-    subgraph XGB["🚀 LAYER 3 — XGBoost (Supervised)"]
+    subgraph XGB["🚀 XGBoost Fraud Classifier — production predictor"]
         xgb_model["XGBoost Classifier<br/>300 trees, max_depth=6<br/>+ SMOTE oversampling"]
-        xgb_model --> fraud_prob["Fraud Probability<br/>(0-1)"]
+        xgb_model --> fraud_prob["Fraud Probability<br/>(0-1)<br/>fraud_score = probability"]
     end
 
-    extract --> if_model
-    extract --> xgb_model
-
-    subgraph ENSEMBLE["⚡ FINAL DECISION ENGINE"]
-        rule_score --> ensemble_calc["Weighted Ensemble<br/>0.2 × Rule + 0.3 × IF + 0.5 × XGB"]
-        anomaly_score --> ensemble_calc
-        fraud_prob --> ensemble_calc
-        ensemble_calc --> final_score{"fraud_score?"}
+    subgraph DECISION["⚡ THRESHOLD POLICY"]
+        fraud_prob --> final_score{"fraud_score?"}
+        rule_alert -. optional override/audit .-> final_score
     end
 
     final_score -- "< 0.3" --> pass["✅ PASS<br/>Normal transaction"]
@@ -390,10 +412,9 @@ flowchart TB
     flag --> shap_calc
     shap_calc --> shap_output
 
-    class r1,r2,r3,r4,r5,r6,r7,rule_check,rule_score rule
-    class if_model,anomaly_score ml
+    class r1,r2,r3,r4,r5,r6,r7,rule_check,rule_alert rule
     class xgb_model,fraud_prob ml
-    class ensemble_calc,final_score ensemble
+    class final_score decision
     class shap_calc,shap_output explain
     class pass,review,flag output
 ```
@@ -483,7 +504,7 @@ flowchart LR
 
         subgraph MODELS["🧠 Model Services"]
             fraud_svc["Fraud Detection<br/>Service<br/>(scikit-learn + XGBoost)"]
-            rec_svc["Recommendation<br/>Service<br/>(scikit-learn / PyTorch)"]
+            rec_svc["Recommendation<br/>Service<br/>(Rule-based Scorer)"]
             lead_svc["Lead Scoring<br/>Service<br/>(Custom Python)"]
             pitch_svc["LLM Pitching<br/>Service<br/>(Deepseek/Gemini client)"]
         end
@@ -607,7 +628,7 @@ flowchart TB
 ## 7. Cấu trúc thư mục dự án
 
 ```text
-ai-transaction-analyzer/
+smart-finance-ai/
 │
 ├── data/
 │   ├── raw/                          # Dữ liệu giao dịch thô
@@ -629,15 +650,23 @@ ai-transaction-analyzer/
 │   ├── fraud/                        # 🚨 Fraud Detection Module
 │   │   ├── feature_engineering.py    # Fraud-specific features
 │   │   ├── rule_based.py             # Rule-based fraud detector (7 rules)
-│   │   ├── model.py                  # ML models (Isolation Forest, XGBoost)
+│   │   ├── model.py                  # XGBoost fraud classifier
 │   │   ├── scoring.py                # Real-time scoring pipeline
 │   │   ├── explainer.py              # SHAP-based explainability
 │   │   └── service.py                # Fraud detection service
 │   │
 │   ├── recommender/                  # 🎯 Recommendation Module
 │   │   ├── rule_based.py             # Rule-based recommender
-│   │   ├── model.py                  # ML ranking model
+│   │   ├── product_catalog.py        # Product catalog loader + validation
+│   │   ├── reason_generator.py       # Explain Top-3 product reasons
 │   │   └── service.py                # Recommendation service
+│   │
+│   ├── segmentation/                 # 🧩 Customer Segmentation Module
+│   │   ├── feature_selection.py      # Chọn feature ổn định cho clustering
+│   │   ├── training.py               # StandardScaler + SVD + KMeans retrain
+│   │   ├── assignment.py             # transform + predict changed users
+│   │   ├── profiling.py              # Aggregate profile + LLM segment naming
+│   │   └── service.py                # Versioning + DB update service
 │   │
 │   ├── lead_scoring/                 # ⭐ Lead Scoring Module
 │   │   ├── lead_score.py             # Lead Score calculation (5 components)
@@ -656,6 +685,7 @@ ai-transaction-analyzer/
 │   │   ├── graph.py                  # LangGraph workflow definition
 │   │   ├── data_agent.py             # Data fetching agent
 │   │   ├── fraud_agent.py            # Fraud detection agent
+│   │   ├── segmentation_agent.py     # Segmentation update/profile agent
 │   │   ├── recommendation_agent.py   # Recommendation agent
 │   │   ├── lead_score_agent.py       # Lead scoring agent
 │   │   ├── lead_queue_agent.py       # Lead queue agent
@@ -665,6 +695,7 @@ ai-transaction-analyzer/
 │       ├── main.py                   # App entry point
 │       ├── routes.py                 # API route definitions
 │       ├── fraud_routes.py           # Fraud detection endpoints
+│       ├── segmentation_routes.py    # Segmentation update/run/cluster endpoints
 │       ├── lead_routes.py            # Lead Queue + mark-consulted endpoints
 │       └── schemas.py                # Pydantic models / request-response schemas
 │
@@ -679,9 +710,14 @@ ai-transaction-analyzer/
 │   └── test_api.py                   # Integration test: API endpoints
 │
 ├── models/                           # 💾 Saved models
-│   ├── isolation_forest.pkl
 │   ├── xgboost_fraud.json
-│   └── recommender.pkl
+│   ├── recommender_rule_config.json
+│   └── segmentation/
+│       ├── scaler.pkl
+│       ├── svd.pkl
+│       ├── kmeans.pkl
+│       ├── feature_schema.json
+│       └── cluster_profiles.json
 │
 ├── configs/                          # ⚙️ Configuration files
 │   ├── fraud_rules.json              # Fraud rule definitions
@@ -707,8 +743,9 @@ ai-transaction-analyzer/
 | Tầng | Công nghệ | Mục đích |
 |---|---|---|
 | **Data Processing** | Pandas, NumPy | Làm sạch, feature engineering |
-| **Fraud Detection** | scikit-learn (Isolation Forest), XGBoost, SHAP | Phát hiện gian lận + giải thích |
-| **Recommendation** | scikit-learn / PyTorch | Gợi ý sản phẩm |
+| **Fraud Detection** | XGBoost, SHAP | Dự đoán fraud_score + giải thích |
+| **Segmentation** | scikit-learn (StandardScaler, TruncatedSVD, KMeans) + LLM profiler | Phân cụm user, đặt tên/mô tả cụm theo version |
+| **Recommendation** | Custom Python rule-based scorer | Gợi ý Top-3 sản phẩm có score breakdown |
 | **Lead Scoring** | Custom Python (NumPy) | Tính lead_score, xếp hạng user |
 | **LLM Integration** | deepseek / google-generativeai | Sinh kịch bản tư vấn |
 | **Agent Orchestration** | LangGraph | Điều phối workflow |

@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Smart Finance AI Dashboard</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Main navigation">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">SF</span>
+          <div>
+            <strong>Smart Finance</strong>
+            <span>AI Operations</span>
+          </div>
+        </div>
+
+        <nav class="nav-tabs" aria-label="Dashboard sections">
+          <button class="nav-tab active" type="button" data-view="recommendation">
+            <span class="nav-icon" aria-hidden="true">RQ</span>
+            Recommendation
+          </button>
+          <button class="nav-tab" type="button" data-view="fraud">
+            <span class="nav-icon" aria-hidden="true">FD</span>
+            Fraud Review
+          </button>
+        </nav>
+
+        <div class="sidebar-block">
+          <span class="eyebrow">Active model</span>
+          <strong>seg_experiment_20260604_pc11_k4</strong>
+          <small>Candidate segmentation snapshot</small>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">MVP dashboard</p>
+            <h1 id="view-title">Recommendation Workspace</h1>
+          </div>
+          <div class="topbar-actions">
+            <label class="search-box">
+              <span class="visually-hidden">Search customers</span>
+              <input id="customer-search" type="search" placeholder="Search customer or product" />
+            </label>
+            <button class="icon-button" id="refresh-button" type="button" title="Refresh scores" aria-label="Refresh scores">
+              <span aria-hidden="true">R</span>
+            </button>
+          </div>
+        </header>
+
+        <section class="view active" id="recommendation-view" aria-labelledby="view-title">
+          <div class="summary-strip" aria-label="Lead queue summary">
+            <div class="metric-block">
+              <span>Hot leads</span>
+              <strong id="hot-count">0</strong>
+              <small>lead_score &gt; 0.85</small>
+            </div>
+            <div class="metric-block accent-green">
+              <span>Eligible users</span>
+              <strong id="eligible-count">0</strong>
+              <small>after fraud policy</small>
+            </div>
+            <div class="metric-block accent-amber">
+              <span>Top product</span>
+              <strong id="top-product-metric">--</strong>
+              <small>highest current demand</small>
+            </div>
+            <div class="metric-block accent-red">
+              <span>Blocked</span>
+              <strong id="blocked-count">0</strong>
+              <small>fraud or fatigue</small>
+            </div>
+          </div>
+
+          <div class="recommendation-layout">
+            <section class="lead-panel" aria-label="Lead queue">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Lead queue</p>
+                  <h2>Prioritized customers</h2>
+                </div>
+                <select id="tier-filter" aria-label="Filter by lead tier">
+                  <option value="all">All tiers</option>
+                  <option value="hot">Hot</option>
+                  <option value="warm">Warm</option>
+                  <option value="cold">Cold</option>
+                </select>
+              </div>
+              <div class="queue-list" id="lead-queue" aria-live="polite"></div>
+            </section>
+
+            <section class="customer-panel" aria-label="Customer recommendation detail">
+              <div class="customer-header">
+                <div>
+                  <p class="eyebrow">Customer profile</p>
+                  <h2 id="customer-id">--</h2>
+                  <p id="customer-segment" class="muted">No customer selected</p>
+                </div>
+                <span class="tier-pill" id="lead-tier">--</span>
+              </div>
+
+              <div class="score-row">
+                <div>
+                  <span>Lead score</span>
+                  <strong id="lead-score">0.00</strong>
+                </div>
+                <div>
+                  <span>Fraud score</span>
+                  <strong id="fraud-score">0.00</strong>
+                </div>
+                <div>
+                  <span>Risk score</span>
+                  <strong id="risk-score">0.00</strong>
+                </div>
+              </div>
+
+              <div class="breakdown-section">
+                <div class="panel-heading tight">
+                  <div>
+                    <p class="eyebrow">Score breakdown</p>
+                    <h3>Lead components</h3>
+                  </div>
+                </div>
+                <div id="lead-breakdown" class="bar-stack"></div>
+              </div>
+
+              <div class="product-section">
+                <div class="panel-heading tight">
+                  <div>
+                    <p class="eyebrow">Top 3</p>
+                    <h3>Recommended products</h3>
+                  </div>
+                </div>
+                <div id="recommendation-list" class="product-list"></div>
+              </div>
+            </section>
+
+            <section class="pitch-panel" aria-label="Pitch and consultation">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Pitching</p>
+                  <h2>Advisor script</h2>
+                </div>
+              </div>
+              <div class="pitch-box" id="pitch-box">Select a customer and generate a pitch.</div>
+              <div class="button-row">
+                <button class="primary-button" id="generate-pitch" type="button">
+                  Generate pitch
+                </button>
+                <button class="secondary-button" id="mark-consulted" type="button">
+                  Mark consulted
+                </button>
+              </div>
+              <div class="consultation-log">
+                <p class="eyebrow">Recent activity</p>
+                <ul id="activity-list"></ul>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="fraud-view" aria-label="Fraud review workspace">
+          <div class="fraud-layout">
+            <section class="fraud-panel" aria-label="Fraud alerts">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Open alerts</p>
+                  <h2>Transaction review</h2>
+                </div>
+                <select id="severity-filter" aria-label="Filter by severity">
+                  <option value="all">All severity</option>
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+              </div>
+              <div id="fraud-alert-list" class="alert-list"></div>
+            </section>
+
+            <section class="fraud-detail" aria-label="Fraud alert detail">
+              <div class="customer-header">
+                <div>
+                  <p class="eyebrow">Selected alert</p>
+                  <h2 id="alert-id">--</h2>
+                  <p id="alert-summary" class="muted">No alert selected</p>
+                </div>
+                <span class="tier-pill danger" id="alert-severity">--</span>
+              </div>
+
+              <div class="gauge-row">
+                <div class="fraud-gauge">
+                  <span id="gauge-score">0.00</span>
+                  <small>fraud score</small>
+                </div>
+                <div class="policy-block">
+                  <span>Policy decision</span>
+                  <strong id="policy-decision">PASS</strong>
+                  <small id="policy-note">Threshold policy from docs</small>
+                </div>
+              </div>
+
+              <div class="breakdown-section">
+                <div class="panel-heading tight">
+                  <div>
+                    <p class="eyebrow">SHAP explanation</p>
+                    <h3>Top contributing signals</h3>
+                  </div>
+                </div>
+                <div id="shap-bars" class="bar-stack"></div>
+              </div>
+
+              <div class="timeline">
+                <p class="eyebrow">Suspicious timeline</p>
+                <ol id="fraud-timeline"></ol>
+              </div>
+
+              <div class="button-row">
+                <button class="primary-button danger-button" id="confirm-fraud" type="button">
+                  Confirm fraud
+                </button>
+                <button class="secondary-button" id="false-positive" type="button">
+                  False positive
+                </button>
+              </div>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

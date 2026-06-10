@@ -79,7 +79,7 @@
 
 Hệ thống thiết kế **hai bộ đặc trưng riêng biệt** cho hai pipeline:
 
-- **Fraud Features (31 features/giao dịch):** Tính real-time tại thời điểm giao dịch đến, input cho Rule-based Filter → Isolation Forest → XGBoost.
+- **Fraud Features (31 features/giao dịch):** Tính real-time tại thời điểm giao dịch đến, input cho XGBoost Fraud Classifier; rule-based guardrail chỉ dùng cho policy/audit nếu cần.
 - **User Features (31 features/user):** Tổng hợp định kỳ từ toàn bộ lịch sử giao dịch, input cho Recommendation Scorer → Lead Scoring.
 
 ---
@@ -152,7 +152,7 @@ Tận dụng dữ liệu **địa lý** và **merchant rủi ro** có sẵn.
 | F30 | `merchant_category_anomaly` | 0/1: merchant_category chưa từng xuất hiện với user này | `merchant_category` + `customer_id` |
 | F31 | `large_amount_night_flag` | 0/1: giao dịch đêm + amount > 3× trung bình | `amount` + `transaction_hour` + `customer_id` |
 
-> **Tổng: 31 fraud features.** Input cho 3 tầng fraud detection: 7 Rule-based Filter → Isolation Forest (200 trees) → XGBoost Classifier (300 trees, SMOTE).
+> **Tổng: 31 fraud features.** Input cho XGBoost Classifier (300 trees, SMOTE/class weight). Rule-based guardrail không tham gia tính `fraud_score`.
 
 ---
 
@@ -281,7 +281,7 @@ flowchart LR
     f_core & f_vel & f_dev & f_seq & f_geo --> fraud_store
     u_rfm & u_cat & u_cf & u_cycle & u_risk --> user_store
 
-    fraud_store --> fraud_model["XGBoost + Isolation Forest"]
+    fraud_store --> fraud_model["XGBoost Fraud Classifier"]
     user_store --> rec_model["Rule-based Scorer + Lead Scoring"]
 ```
 
@@ -314,5 +314,4 @@ flowchart LR
 | Xử lý dữ liệu | Sample 30–50% nếu máy yếu; chuẩn hóa `merchant_category` |
 | Nhãn Recommendation | Pseudo-label từ Rule-based Scorer |
 | Mở rộng sau MVP | PaySim nếu cần `balance_before/after`; dữ liệu thật khi vận hành |
-
 

@@ -17,6 +17,10 @@ erDiagram
     USER_FEATURES ||--o{ FRAUD_ALERTS : "has"
     USER_FEATURES ||--o{ CONSULTATION_LOG : "consulted for"
     USER_FEATURES ||--|| LEAD_SCORES : "has"
+    USER_FEATURES ||--o{ USER_SEGMENTS : "assigned to"
+    SEGMENTATION_MODEL_VERSIONS ||--o{ USER_SEGMENTS : "assigns"
+    SEGMENTATION_MODEL_VERSIONS ||--o{ CLUSTER_PROFILES : "defines"
+    SEGMENTATION_MODEL_VERSIONS ||--o{ SEGMENTATION_RUNS : "produces"
     
     PRODUCT_CATALOG ||--o{ RECOMMENDATION_LOGS : "recommended in"
     PRODUCT_CATALOG ||--o{ PITCH_LOGS : "pitched in"
@@ -34,12 +38,18 @@ erDiagram
         text transaction_type
         text merchant_name
         text merchant_category
+        text country
+        text city
+        text card_type
+        boolean card_present
         float balance_before
         float balance_after
         text channel
         text device_id
+        text device_fingerprint
         text ip_address
         text status
+        boolean is_fraud
     }
 
     USER_FEATURES {
@@ -84,7 +94,11 @@ erDiagram
         text product_type
         text description
         text target_behavior
+        text target_signals_json
+        text eligibility_json
         text risk_allowed
+        float campaign_priority
+        text reason_template
         boolean is_active
         timestamp created_at
     }
@@ -108,10 +122,10 @@ erDiagram
         text score_id PK
         text user_id FK
         text transaction_id FK
-        float rule_based_score
-        float isolation_forest_score
         float xgboost_score
         float final_fraud_score
+        float decision_threshold
+        boolean predicted_fraud
         text shap_values
         text features_used
         text model_version
@@ -135,7 +149,11 @@ erDiagram
         text user_id FK
         text product_id FK
         float score
-        text reason
+        text score_breakdown_json
+        text reason_json
+        float fraud_score
+        float risk_score
+        text model_version
         timestamp created_at
     }
 
@@ -174,14 +192,63 @@ erDiagram
         float top_product_score
         float product_match_score
         float propensity_score
-        float recency_boost
+        float recency_score
         float customer_value_score
-        float fatigue_penalty
+        float fatigue_score
         int days_since_last_contact
         int contact_count_30d
         text last_contact_status
         text eligibility_status
         timestamp calculated_at
+    }
+
+    SEGMENTATION_MODEL_VERSIONS {
+        text model_version PK
+        int n_components
+        int k
+        text scaler_path
+        text svd_path
+        text kmeans_path
+        text feature_schema
+        text metrics_json
+        text selection_policy
+        text status
+        timestamp trained_at
+        timestamp activated_at
+        text created_by
+    }
+
+    USER_SEGMENTS {
+        text user_id PK
+        int cluster_id
+        text model_version FK
+        float distance_to_centroid
+        text assignment_mode
+        timestamp assigned_at
+    }
+
+    CLUSTER_PROFILES {
+        text model_version FK
+        int cluster_id
+        text cluster_name
+        text description
+        int size
+        float ratio
+        text top_features_json
+        text product_hints_json
+        float llm_confidence
+    }
+
+    SEGMENTATION_RUNS {
+        text run_id PK
+        text model_version FK
+        text mode
+        text status
+        int users_processed
+        float duration_seconds
+        text error_message
+        timestamp started_at
+        timestamp finished_at
     }
 
     MARKETING_CAMPAIGNS {
@@ -215,12 +282,18 @@ CREATE TABLE transactions (
     transaction_type    TEXT,               -- 'transfer', 'payment', 'deposit', 'withdrawal', 'refund'
     merchant_name       TEXT,
     merchant_category   TEXT,               -- 'shopping', 'travel', 'food', 'healthcare', 'education', ...
-    balance_before      FLOAT,
-    balance_after       FLOAT,
+    country             TEXT,               -- Quốc gia giao dịch (từ CSV)
+    city                TEXT,               -- Thành phố giao dịch (từ CSV)
+    card_type           TEXT,               -- 'credit', 'debit', 'prepaid' (từ CSV)
+    card_present        BOOLEAN,            -- Thẻ có mặt tại POS? (từ CSV, dùng cho fraud)
+    balance_before      FLOAT,              -- ⚠️ Dataset thiếu — ước lượng từ amount + transaction_type
+    balance_after       FLOAT,              -- ⚠️ Dataset thiếu — ước lượng từ amount + transaction_type
     channel             TEXT,               -- 'mobile_app', 'web', 'atm', 'pos', 'bank_counter'
     device_id           TEXT,
+    device_fingerprint  TEXT,               -- Vân tay thiết bị (từ CSV, dùng cho Account Takeover detection)
     ip_address          TEXT,
     status              TEXT DEFAULT 'completed',  -- 'completed', 'pending', 'failed', 'reversed'
+    is_fraud            BOOLEAN DEFAULT FALSE,     -- Nhãn fraud 0/1 — bắt buộc cho XGBoost training
     
     created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -231,7 +304,9 @@ CREATE INDEX idx_tx_time ON transactions(transaction_time DESC);
 CREATE INDEX idx_tx_user_time ON transactions(user_id, transaction_time DESC);
 CREATE INDEX idx_tx_category ON transactions(merchant_category);
 CREATE INDEX idx_tx_device ON transactions(device_id);
+CREATE INDEX idx_tx_device_fp ON transactions(device_fingerprint);
 CREATE INDEX idx_tx_status ON transactions(status);
+CREATE INDEX idx_tx_fraud ON transactions(is_fraud);
 ```
 
 | Cột | Kiểu | Mô tả |
@@ -243,12 +318,18 @@ CREATE INDEX idx_tx_status ON transactions(status);
 | `transaction_type` | TEXT | Loại giao dịch |
 | `merchant_name` | TEXT | Tên merchant |
 | `merchant_category` | TEXT | Danh mục chi tiêu |
-| `balance_before` | FLOAT | Số dư trước giao dịch |
-| `balance_after` | FLOAT | Số dư sau giao dịch |
+| `country` | TEXT | Quốc gia giao dịch |
+| `city` | TEXT | Thành phố giao dịch |
+| `card_type` | TEXT | Loại thẻ (credit/debit/prepaid) |
+| `card_present` | BOOLEAN | Thẻ có mặt tại POS? |
+| `balance_before` | FLOAT | Số dư trước giao dịch ⚠️ ước lượng |
+| `balance_after` | FLOAT | Số dư sau giao dịch ⚠️ ước lượng |
 | `channel` | TEXT | Kênh giao dịch |
 | `device_id` | TEXT | Mã thiết bị |
+| `device_fingerprint` | TEXT | Vân tay thiết bị (Account Takeover) |
 | `ip_address` | TEXT | Địa chỉ IP |
 | `status` | TEXT | Trạng thái giao dịch |
+| `is_fraud` | BOOLEAN | Nhãn fraud 0/1 (dùng cho training) |
 
 ---
 
@@ -322,9 +403,13 @@ CREATE TABLE product_catalog (
     product_type        TEXT NOT NULL,          -- 'credit_card', 'insurance', 'loan', 'saving'
     description         TEXT,
     target_behavior     TEXT,                   -- 'shopping_high', 'travel_high', 'negative_cashflow', ...
+    target_signals_json TEXT,                   -- JSON: feature weights for behavior_match
+    eligibility_json    TEXT,                   -- JSON: min income, age, KYC, ownership, cooldown rules
     risk_allowed        TEXT DEFAULT 'low',     -- 'low', 'medium', 'high'
     min_risk_score      FLOAT DEFAULT 0.0,
     max_risk_score      FLOAT DEFAULT 1.0,
+    campaign_priority   FLOAT DEFAULT 0.5,      -- normalized business priority (0-1)
+    reason_template     TEXT,                   -- reusable reason copy for recommendation output
     is_active           BOOLEAN DEFAULT TRUE,
     created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -379,17 +464,17 @@ CREATE INDEX idx_fa_created ON fraud_alerts(created_at DESC);
 
 ### 2.5. Bảng `fraud_model_scores`
 
-Lưu điểm chi tiết từ từng model để audit và debug.
+Lưu điểm dự đoán từ XGBoost Fraud Classifier để audit và debug. Production fraud prediction hiện dùng XGBoost-only; rule guardrail nếu có chỉ lưu ở `fraud_rules`/`fraud_alerts`, không tham gia model score.
 
 ```sql
 CREATE TABLE fraud_model_scores (
     score_id                TEXT PRIMARY KEY,
     user_id                 TEXT NOT NULL,
     transaction_id          TEXT,
-    rule_based_score        FLOAT,              -- Điểm từ rule-based (0-1)
-    isolation_forest_score  FLOAT,              -- Điểm từ Isolation Forest (0-1)
-    xgboost_score           FLOAT,              -- Điểm từ XGBoost (0-1)
-    final_fraud_score       FLOAT NOT NULL,     -- Điểm tổng hợp cuối cùng (0-1)
+    xgboost_score           FLOAT NOT NULL,     -- Probability từ XGBoost (0-1)
+    final_fraud_score       FLOAT NOT NULL,     -- Bằng xgboost_score hoặc calibrated score
+    decision_threshold      FLOAT DEFAULT 0.5,  -- Threshold đang dùng tại thời điểm score
+    predicted_fraud         BOOLEAN,            -- final_fraud_score >= decision_threshold
     shap_values             TEXT,               -- JSON: {"amount_zscore": 0.35, "device_change": 0.28, ...}
     features_used           TEXT,               -- JSON: giá trị các feature đã dùng
     model_version           TEXT,               -- Phiên bản model
@@ -448,9 +533,11 @@ CREATE TABLE recommendation_logs (
     user_id         TEXT NOT NULL,
     product_id      TEXT NOT NULL,
     score           FLOAT NOT NULL,            -- Điểm phù hợp (0-1)
-    reason          TEXT,                       -- Lý do gợi ý
+    score_breakdown_json TEXT,                  -- JSON: behavior_match, segment_affinity, affordability_fit, ...
+    reason_json     TEXT,                       -- JSON: 2-3 reasons shown to marketer
     fraud_score     FLOAT,                      -- Fraud score tại thời điểm gợi ý
     risk_score      FLOAT,                      -- Risk score tại thời điểm gợi ý
+    model_version   TEXT,                       -- Segmentation/model version used for context
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
     FOREIGN KEY (user_id) REFERENCES user_features(user_id),
@@ -553,9 +640,9 @@ CREATE TABLE lead_scores (
     -- Score Components
     product_match_score         FLOAT,                  -- w1 × max(top-3 score)
     propensity_score            FLOAT,                  -- w2 × nhu cầu
-    recency_boost               FLOAT,                  -- w3 × thời gian chưa liên hệ
+    recency_score               FLOAT,                  -- w3 × thời gian chưa liên hệ
     customer_value_score        FLOAT,                  -- w4 × giá trị khách hàng
-    fatigue_penalty             FLOAT,                  -- w5 × tần suất liên hệ
+    fatigue_score               FLOAT,                  -- w5 × tần suất liên hệ
     
     -- Contact Info
     days_since_last_contact     INTEGER,                -- NULL nếu chưa từng
@@ -584,9 +671,9 @@ CREATE INDEX idx_ls_calculated ON lead_scores(calculated_at DESC);
 ```text
 LEAD_SCORE = 0.30 × product_match_score
            + 0.25 × propensity_score
-           + 0.20 × recency_boost
+           + 0.20 × recency_score
            + 0.15 × customer_value_score
-           − 0.10 × fatigue_penalty
+           − 0.10 × fatigue_score
 ```
 
 **Phân loại Lead Tier:**
@@ -599,7 +686,137 @@ LEAD_SCORE = 0.30 × product_match_score
 
 ---
 
-### 2.11. Bảng `marketing_campaigns`
+### 2.11. Bảng `segmentation_model_versions`
+
+Lưu metadata và artifact paths cho mỗi version phân cụm khách hàng. Chỉ một version nên có `status = 'active'` tại một thời điểm; full retrain tạo version `candidate` trước khi promote.
+
+```sql
+CREATE TABLE segmentation_model_versions (
+    model_version          TEXT PRIMARY KEY,       -- VD: seg_2026_06_04_001
+    n_components           INTEGER NOT NULL,       -- Số PC/SVD components được chọn
+    k                      INTEGER NOT NULL,       -- Số cụm KMeans
+    scaler_path            TEXT NOT NULL,          -- models/segmentation/<version>/scaler.pkl
+    svd_path               TEXT NOT NULL,
+    kmeans_path            TEXT NOT NULL,
+    feature_schema         TEXT NOT NULL,          -- JSON: ordered feature list + preprocessing rules
+    metrics_json           TEXT,                   -- JSON: explained variance, silhouette, DBI, CH, stability
+    selection_policy       TEXT,                   -- JSON/text: rule chọn PC/K
+    status                 TEXT DEFAULT 'candidate', -- 'candidate', 'active', 'archived', 'rejected'
+    trained_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    activated_at           TIMESTAMP,
+    created_by             TEXT
+);
+
+CREATE INDEX idx_seg_model_status ON segmentation_model_versions(status, trained_at DESC);
+```
+
+---
+
+### 2.12. Bảng `user_segments`
+
+Lưu cụm của từng user theo từng `model_version`. Không được hiểu `cluster_id = 0` là cùng một ý nghĩa giữa các version khác nhau.
+
+```sql
+CREATE TABLE user_segments (
+    user_id                 TEXT NOT NULL,
+    model_version           TEXT NOT NULL,
+    cluster_id              INTEGER NOT NULL,
+    distance_to_centroid    FLOAT,                 -- Khoảng cách trong không gian SVD
+    assignment_mode         TEXT DEFAULT 'predict', -- 'predict', 'full_retrain', 'manual_override'
+    assigned_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (user_id, model_version),
+    FOREIGN KEY (user_id) REFERENCES user_features(user_id),
+    FOREIGN KEY (model_version) REFERENCES segmentation_model_versions(model_version)
+);
+
+CREATE INDEX idx_user_segments_user ON user_segments(user_id, assigned_at DESC);
+CREATE INDEX idx_user_segments_cluster ON user_segments(model_version, cluster_id);
+```
+
+---
+
+### 2.13. Bảng `cluster_profiles`
+
+Lưu tên, mô tả và insight của từng cụm theo version. Tên cụm do LLM gợi ý nhưng phải dựa trên aggregate profile, không dựa trên raw transaction hoặc PII.
+
+```sql
+CREATE TABLE cluster_profiles (
+    model_version           TEXT NOT NULL,
+    cluster_id              INTEGER NOT NULL,
+    cluster_name            TEXT NOT NULL,
+    description             TEXT,
+    size                    INTEGER,
+    ratio                   FLOAT,                 -- size / total users
+    top_features_json       TEXT,                  -- JSON: top positive/negative z-score features
+    product_hints_json      TEXT,                  -- JSON: product hints for recommender context
+    centroid_json           TEXT,                  -- JSON: centroid/SVD vector if needed for audit
+    previous_cluster_id     INTEGER,               -- Mapping với version trước nếu có
+    previous_similarity     FLOAT,
+    llm_model               TEXT,
+    llm_confidence          FLOAT,
+    needs_review            BOOLEAN DEFAULT FALSE,
+    created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (model_version, cluster_id),
+    FOREIGN KEY (model_version) REFERENCES segmentation_model_versions(model_version)
+);
+
+CREATE INDEX idx_cluster_profiles_version ON cluster_profiles(model_version, cluster_id);
+CREATE INDEX idx_cluster_profiles_review ON cluster_profiles(needs_review, created_at DESC);
+```
+
+`product_hints_json` chuẩn cho recommender:
+
+```json
+[
+  {
+    "product_id": "P002",
+    "affinity": 0.86,
+    "confidence": 0.78,
+    "positive_signals": ["travel_ratio_high", "online_spend_high"],
+    "reason": "Cụm này có chi tiêu du lịch và thanh toán online nổi bật"
+  }
+]
+```
+
+---
+
+### 2.14. Bảng `segmentation_runs`
+
+Audit mỗi lần bấm cập nhật hoặc chạy cron. `changed_users` dùng model active để gán cụm nhanh; `full_retrain` tạo model candidate và không ghi đè active cho đến khi đạt quality threshold.
+
+```sql
+CREATE TABLE segmentation_runs (
+    run_id                 TEXT PRIMARY KEY,
+    model_version          TEXT,
+    mode                   TEXT NOT NULL,          -- 'changed_users', 'full_retrain'
+    status                 TEXT NOT NULL,          -- 'queued', 'running', 'succeeded', 'failed', 'rejected'
+    triggered_by           TEXT,                   -- 'admin', 'cron', 'system'
+    users_processed        INTEGER DEFAULT 0,
+    changed_users_count    INTEGER DEFAULT 0,
+    duration_seconds       FLOAT,
+    metrics_json           TEXT,                   -- JSON: run-level metrics and checks
+    error_message          TEXT,
+    started_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    finished_at            TIMESTAMP,
+
+    FOREIGN KEY (model_version) REFERENCES segmentation_model_versions(model_version)
+);
+
+CREATE INDEX idx_seg_runs_status ON segmentation_runs(status, started_at DESC);
+CREATE INDEX idx_seg_runs_mode ON segmentation_runs(mode, started_at DESC);
+```
+
+**Production policy:**
+
+- `cluster_id` chỉ ổn định trong cùng một `model_version`; mọi UI/API phải hiển thị kèm `model_version` hoặc lấy từ active version.
+- Không hard-code `cluster_names = {0: ..., 1: ...}` trong code production. Tên cụm đọc từ `cluster_profiles`.
+- LLM chỉ được nhận aggregate profile: size, ratio, centroid/profile similarity, top z-score features và product hints. Không gửi raw transaction, card number, IP, device fingerprint hoặc PII.
+
+---
+
+### 2.15. Bảng `marketing_campaigns`
 
 Cấu hình chiến dịch marketing để filter Lead Queue.
 
@@ -624,7 +841,7 @@ CREATE INDEX idx_camp_active ON marketing_campaigns(is_active, start_date, end_d
 
 | campaign_id | campaign_name | target_product_type | min_lead_score |
 |---|---|---|---|
-| CAMP001 | Du lịch hè 2024 | insurance | 0.70 |
+| CAMP001 | Du lịch hè 2026 | insurance | 0.70 |
 | CAMP002 | Tài chính cuối năm | loan | 0.60 |
 | CAMP003 | Back to school | saving | 0.65 |
 
@@ -639,6 +856,7 @@ flowchart LR
     classDef fraud fill:#533483,stroke:#3a2568,color:#e0e0e0
     classDef rec fill:#1b7a4a,stroke:#145c38,color:#e0e0e0
     classDef lead fill:#b8860b,stroke:#8b6508,color:#fff
+    classDef seg fill:#6c5ce7,stroke:#4834d4,color:#fff
     classDef log fill:#2c3e50,stroke:#1a252f,color:#e0e0e0
 
     subgraph RAW["📦 Raw Data"]
@@ -647,6 +865,13 @@ flowchart LR
 
     subgraph FEAT["🗂️ Feature Stores"]
         uf[("user_features")]
+    end
+
+    subgraph SEG["🧩 Customer Segmentation"]
+        smv[("segmentation_model_versions")]
+        us[("user_segments")]
+        cp[("cluster_profiles")]
+        sr[("segmentation_runs")]
     end
 
     subgraph FRAUD["🚨 Fraud Module"]
@@ -671,6 +896,13 @@ flowchart LR
     end
 
     txn -->|"Feature Engineering"| uf
+    uf -->|"SVD + KMeans assignment"| us
+    smv -->|"Active/candidate model"| us
+    smv -->|"Defines cluster names"| cp
+    smv -->|"Audit runs"| sr
+    cp -->|"Segment context"| rl
+    cp -->|"Segment context"| ls
+
     txn -->|"Fraud Scoring"| fa
     txn -->|"Model Scores"| fms
     fr -->|"Triggers"| fa
@@ -691,6 +923,7 @@ flowchart LR
 
     class txn source
     class uf feature
+    class smv,us,cp,sr seg
     class fa,fms,fr fraud
     class pc rec
     class ls,cl,mc lead
@@ -710,9 +943,9 @@ SELECT
     ls.lead_tier,
     ls.product_match_score,
     ls.propensity_score,
-    ls.recency_boost,
+    ls.recency_score,
     ls.customer_value_score,
-    ls.fatigue_penalty,
+    ls.fatigue_score,
     ls.days_since_last_contact,
     ls.contact_count_30d,
     pc.product_name AS top_product_name,
@@ -809,6 +1042,53 @@ GROUP BY ls.lead_tier
 ORDER BY ls.lead_tier;
 ```
 
+### 4.7. Lấy segment active của một user
+
+```sql
+SELECT
+    us.user_id,
+    us.model_version,
+    us.cluster_id,
+    us.distance_to_centroid,
+    us.assignment_mode,
+    us.assigned_at,
+    cp.cluster_name,
+    cp.description,
+    cp.top_features_json,
+    cp.product_hints_json,
+    cp.llm_confidence,
+    cp.needs_review
+FROM user_segments us
+JOIN segmentation_model_versions smv
+    ON us.model_version = smv.model_version
+JOIN cluster_profiles cp
+    ON cp.model_version = us.model_version
+   AND cp.cluster_id = us.cluster_id
+WHERE us.user_id = 'U0042'
+  AND smv.status = 'active';
+```
+
+### 4.8. Lấy danh sách cụm của model active
+
+```sql
+SELECT
+    cp.model_version,
+    cp.cluster_id,
+    cp.cluster_name,
+    cp.description,
+    cp.size,
+    cp.ratio,
+    cp.top_features_json,
+    cp.product_hints_json,
+    cp.llm_confidence,
+    cp.needs_review
+FROM cluster_profiles cp
+JOIN segmentation_model_versions smv
+    ON cp.model_version = smv.model_version
+WHERE smv.status = 'active'
+ORDER BY cp.cluster_id;
+```
+
 ---
 
 ## 5. Chiến lược Index
@@ -824,6 +1104,11 @@ ORDER BY ls.lead_tier;
 | `lead_scores` | `(top_product_id, lead_score DESC)` | Lead Queue theo sản phẩm |
 | `consultation_log` | `(user_id, contacted_at DESC)` | Lịch sử tư vấn |
 | `consultation_log` | `(next_follow_up_at) WHERE NOT NULL` | Nhắc follow-up |
+| `segmentation_model_versions` | `(status, trained_at DESC)` | Lấy active/candidate model nhanh |
+| `user_segments` | `(user_id, assigned_at DESC)` | Lấy segment của một user |
+| `user_segments` | `(model_version, cluster_id)` | Thống kê user theo cụm/version |
+| `cluster_profiles` | `(model_version, cluster_id)` | Lấy profile cụm active |
+| `segmentation_runs` | `(status, started_at DESC)` | Theo dõi job cập nhật/retrain |
 
 ---
 
@@ -836,5 +1121,9 @@ ORDER BY ls.lead_tier;
 | `fraud_model_scores` | 1 năm | Weekly full |
 | `consultation_log` | 3 năm | Weekly full |
 | `lead_scores` | Tính lại mỗi ngày (không cần backup) | — |
+| `segmentation_model_versions` | Giữ toàn bộ model metadata | Weekly full |
+| `user_segments` | Giữ ít nhất 6 tháng hoặc 5 active versions gần nhất | Weekly full |
+| `cluster_profiles` | Giữ theo model_version | Weekly full |
+| `segmentation_runs` | 1 năm | Weekly full |
 | `pitch_logs` | 1 năm | Weekly full |
 | `recommendation_logs` | 1 năm | Weekly full |

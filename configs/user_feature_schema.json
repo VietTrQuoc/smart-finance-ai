@@ -1,0 +1,52 @@
+{
+  "table": "user_features",
+  "version": "user_features_v1",
+  "columns": [
+    "user_id",
+    "recency_days",
+    "frequency_7d",
+    "frequency_30d",
+    "frequency_90d",
+    "monetary_7d",
+    "monetary_30d",
+    "monetary_90d",
+    "avg_transaction_amount",
+    "max_transaction_amount",
+    "std_transaction_amount",
+    "shopping_ratio",
+    "travel_ratio",
+    "food_ratio",
+    "education_ratio",
+    "healthcare_ratio",
+    "entertainment_ratio",
+    "cashout_ratio",
+    "transfer_ratio",
+    "loan_payment_ratio",
+    "income_total_30d",
+    "expense_total_30d",
+    "net_cashflow_30d",
+    "negative_cashflow_days",
+    "end_month_negative_cashflow_flag",
+    "balance_volatility",
+    "salary_detected_flag",
+    "weekend_spending_ratio",
+    "night_transaction_ratio",
+    "travel_frequency_90d",
+    "shopping_frequency_30d",
+    "risk_score",
+    "updated_at"
+  ],
+  "source_columns": {
+    "user_id": "customer_id",
+    "timestamp": "timestamp",
+    "amount": "amount",
+    "category": "merchant_category",
+    "risk": ["is_fraud", "high_risk_merchant", "distance_from_home", "card_present"]
+  },
+  "dataset_assumptions": [
+    "The source dataset is card-spend oriented and has no explicit income transaction type.",
+    "income_total_30d and salary_detected_flag are set to zero until a source with inbound cashflow exists.",
+    "expense_total_30d uses 30-day card spending as an expense proxy.",
+    "cashout_ratio, transfer_ratio, and loan_payment_ratio remain zero unless matching source categories appear."
+  ]
+}
